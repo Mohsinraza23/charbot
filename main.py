@@ -1,78 +1,78 @@
 import os
+import json
 from dotenv import load_dotenv
 import chainlit as cl
 from litellm import completion
-import json
 
-# Load the environment variables from the .env file
+# ─────────────────────────────────────────────
+# 🔐 Load API Key from Environment Variables
+# ─────────────────────────────────────────────
 load_dotenv()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-gemini_api_key = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    raise ValueError("❌ GEMINI_API_KEY is missing in .env file.")
 
-# Check if the API key is present; if not, raise an error
-if not gemini_api_key:
-    raise ValueError("GEMINI_API_KEY is not set. Please ensure it is defined in your .env file.")
-
+# ─────────────────────────────────────────────
+# 💬 Chat Start Event
+# ─────────────────────────────────────────────
 @cl.on_chat_start
-async def start():
-    """Set up the chat session when a user connects."""
-    # Initialize an empty chat history in the session.
+async def start_chat():
+    """Initialize user session when chat starts."""
     cl.user_session.set("chat_history", [])
+    await cl.Message(
+        content="✨ Welcome to the **Mohsin's AI Assistant** — your intelligent companion! How can I assist you today?"
+    ).send()
 
-    await cl.Message(content="Welcome to the Mohsin AI Assistant! How can I help you today?").send()
 
+# ─────────────────────────────────────────────
+# 📩 Message Handler
+# ─────────────────────────────────────────────
 @cl.on_message
-async def main(message: cl.Message):
-    """Process incoming messages and generate responses."""
-    # Send a thinking message
-    msg = cl.Message(content="Thinking...")
+async def handle_message(message: cl.Message):
+    """Handle incoming user messages and generate AI responses."""
+    
+    # Temporary "thinking..." response
+    msg = cl.Message(content="🤖 Thinking...")
     await msg.send()
 
-    # Retrieve the chat history from the session.
+    # Get chat history
     history = cl.user_session.get("chat_history") or []
-    
-    # Append the user's message to the history.
     history.append({"role": "user", "content": message.content})
-    
 
     try:
-        # Get completion from LiteLLM
+        # Generate response using LiteLLM
         response = completion(
             model="gemini/gemini-2.0-flash",
-            api_key=gemini_api_key,
+            api_key=GEMINI_API_KEY,
             messages=history
         )
-        
-        response_content = response.choices[0].message.content
-        
-        # Update the thinking message with the actual response
-        msg.content = response_content
-        await msg.update()
 
-        # Append the assistant's response to the history.
-        history.append({"role": "assistant", "content": response_content})
-    
-        # Update the session with the new history.
+        # Extract content
+        assistant_reply = response.choices[0].message.content
+
+        # Update message and history
+        msg.content = assistant_reply
+        await msg.update()
+        history.append({"role": "assistant", "content": assistant_reply})
         cl.user_session.set("chat_history", history)
-        
-        # Optional: Log the interaction
-        print(f"User: {message.content}")
-        print(f"Assistant: {response_content}")
-        
+
+        # Log for debugging
+        print(f"🧑‍💻 User: {message.content}")
+        print(f"🤖 Assistant: {assistant_reply}")
+
     except Exception as e:
-        msg.content = f"Error: {str(e)}"
+        msg.content = f"⚠️ Error: {str(e)}"
         await msg.update()
-        print(f"Error: {str(e)}")
+        print(f"❌ Error: {str(e)}")
 
-
-# Right on it is not fully functioning because we are not
-# loading json file on on_chat_start
+# ─────────────────────────────────────────────
+# 🛑 Chat End Event
+# ─────────────────────────────────────────────
 @cl.on_chat_end
-async def on_chat_end():
-    # Retrieve the full chat history at the end of the session
+async def save_chat_history():
+    """Save the chat history to a file at the end of the session."""
     history = cl.user_session.get("chat_history") or []
-    # Save the chat history to a file (or persist it elsewhere)
     with open("chat_history.json", "w") as f:
         json.dump(history, f, indent=2)
-    print("Chat history saved.")
-
+    print("✅ Chat history saved to chat_history.json")
